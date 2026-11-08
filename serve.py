@@ -98,10 +98,27 @@ def build_prompt(user_text: str) -> str:
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
-    protocol_version = "HTTP/1.1"
+    # HTTP/1.0 + 显式 Connection: close —— 避免 keep-alive 请求体错位
+    protocol_version = "HTTP/1.0"
 
     def log_message(self, *args):
         pass
+
+    def _drain(self):
+        """读完并丢弃请求体。
+
+        不做这一步，keep-alive 连接上残留的 body 字节会被当成下一个请求的
+        请求行，导致 501 Unsupported method ('{"params":...}GET')。
+        """
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        if n > 0:
+            try:
+                self.rfile.read(n)
+            except Exception:
+                pass
 
     def _send(self, code, body, ctype="application/json; charset=utf-8"):
         data = body.encode("utf-8") if isinstance(body, str) else body
@@ -109,10 +126,15 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Connection", "close")
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass
 
     def do_GET(self):
+        self._drain()
         if self.path in ("/", "/index.html"):
             self._send(200, INDEX_HTML, "text/html; charset=utf-8")
         elif self.path == "/health":
@@ -121,42 +143,58 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send(404, json.dumps({"error": "not found"}))
 
     def do_POST(self):
+        try:
+            n = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        raw = b""
+        if n > 0:
+            try:
+                raw = self.rfile.read(n)
+            except Exception:
+                raw = b""
+
         if self.path != "/api/chat":
             self._send(404, json.dumps({"error": "not found"}))
             return
         try:
-            n = int(self.headers.get("Content-Length", 0))
-            payload = json.loads(self.rfile.read(n) or b"{}")
+            payload = json.loads(raw or b"{}")
             prompt = (payload.get("prompt") or "").strip()
             if not prompt:
                 self._send(400, json.dumps({"error": "empty prompt"}))
                 return
 
+            # 用 /v1/chat/completions 且【不发 system】。
+            # 实测：带 system 时中文占比掉到 0.27（3 条里 2 条崩成全英文），
+            # 不带 system 是 0.78。这个 31.5M 模型 SFT 时几乎没见过 system 角色。
             body = json.dumps({
-                "prompt": build_prompt(prompt),
-                "n_predict": int(payload.get("max_new", 180)),
-                "temperature": 0.8,
-                "top_k": 40,
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": int(payload.get("max_new", 150)),
+                "temperature": 0.7,
                 "top_p": 0.9,
-                "repeat_penalty": 1.15,
-                "stop": ["<|im_end|>", "<|im_start|>"],
+                "repeat_penalty": 1.25,
                 "stream": False,
             }).encode("utf-8")
 
             req = urllib.request.Request(
-                f"{LLAMA_URL}/completion", data=body,
+                f"{LLAMA_URL}/v1/chat/completions", data=body,
                 headers={"Content-Type": "application/json"})
             with urllib.request.urlopen(req, timeout=180) as r:
                 d = json.loads(r.read())
 
-            text = (d.get("content") or "").strip()
+            text = (d.get("choices") or [{}])[0].get("message", {}).get("content", "")
+            text = (text or "").strip()
             for stop in ("<|im_end|>", "<|im_start|>"):
                 if stop in text:
                     text = text.split(stop)[0].strip()
+            usage = d.get("usage") or {}
+            timings = d.get("timings") or {}
             stats = ""
-            if "timings" in d:
-                t = d["timings"]
-                stats = f"{t.get('predicted_n',0)} tok · {t.get('predicted_per_second',0):.1f} tok/s"
+            if timings:
+                stats = (f"{timings.get('predicted_n', 0)} tok · "
+                         f"{timings.get('predicted_per_second', 0):.1f} tok/s")
+            elif usage:
+                stats = f"{usage.get('completion_tokens', 0)} tok"
             self._send(200, json.dumps({"text": text, "stats": stats}, ensure_ascii=False))
         except urllib.error.URLError as e:
             self._send(502, json.dumps({"error": f"llama-server 不可达：{e}"}, ensure_ascii=False))
