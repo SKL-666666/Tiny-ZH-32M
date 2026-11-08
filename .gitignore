@@ -1,0 +1,17 @@
+# 数据与产物（体积大，可从云端/GitHub 重新获取）
+data/
+models/
+out/
+__pycache__/
+*.pyc
+*.gguf
+*.bin
+*.pt
+
+# 第三方工具（llama.cpp，按需从官方下载）
+tools/
+
+# 临时文件
+*.log
+gguf_test_out.txt
+batch_test.ps1
