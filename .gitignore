@@ -1,0 +1,10 @@
+﻿# 数据与产物（体积大，不进 git）
+data/
+out/
+models/
+_smoke*/
+_diag*/
+*.gguf
+*.bin
+*.npy
+*.pt
