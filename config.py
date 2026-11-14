@@ -11,16 +11,16 @@ class ModelConfig:
     vocab_size: int = 6400
 
     # ---- 主干 ----
-    hidden_size: int = 512
-    num_layers: int = 10
-    num_heads: int = 8
-    num_kv_heads: int = 2
+    hidden_size: int = 768
+    num_layers: int = 12
+    num_heads: int = 12
+    num_kv_heads: int = 4
     head_dim: int = 64            # = hidden_size / num_heads
-    intermediate_size: int = 1408  # SwiGLU 中间维
+    intermediate_size: int = 2048  # SwiGLU 中间维
 
     # ---- 位置编码 ----
-    max_position_embeddings: int = 512
-    rope_theta: float = 10000.0
+    max_position_embeddings: int = 1024
+    rope_theta: float = 500000.0
 
     # ---- 归一化 ----
     rms_norm_eps: float = 1e-5
