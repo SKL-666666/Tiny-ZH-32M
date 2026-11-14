@@ -1,0 +1,15 @@
+﻿python : C:\Users\yifen\AppData\Local\Programs\Python\Python313\Lib\site-packages\torch\cuda\__init__.py:68: FutureWarn
+ing: The pynvml package is deprecated. Please install nvidia-ml-py instead. If you did not install pynvml directly, ple
+ase report this to the maintainers of the package that installed pynvml for you.
+所在位置 行:1 字符: 197
++ ... ny-ZH"; $env:PYTHONIOENCODING="utf-8"; python smoke80.py 2>&1 | Out-F ...
++                                            ~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\yifen\...pynvml for you.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  import pynvml  # type: ignore[import]
+C:\Users\yifen\Desktop\Tiny-ZH\smoke80.py:23: UserWarning: Converting a tensor with requires_grad=True to a scalar may 
+lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at C:\actions-runner\_work\pytorch\pytorch\torch\csrc\autog
+rad\generated\python_variable_methods.cpp:821.)
+  print(f"loss   {float(out['loss']):.4f}")
