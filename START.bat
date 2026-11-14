@@ -16,13 +16,19 @@ if not exist "%~dp0tools\llama-server.exe" (
     exit /b 1
 )
 
-echo Starting llama-server on port 8080...
-start "tiny-zh-llama" /min "%~dp0tools\llama-server.exe" -m "%MODEL%" --host 127.0.0.1 --port 8080 -c 512 -t 4 --no-warmup --jinja
+REM Model was trained with seq_len=256 only.
+REM YaRN scaling (scale=2, orig_ctx=256) extends usable context to 512
+REM without retraining. Without it, any prompt >256 tokens makes the
+REM model emit EOS immediately (looks like "no output").
+echo Starting llama-server on port 8080 (context 512, YaRN from 256)...
+start "tiny-zh-llama" /min "%~dp0tools\llama-server.exe" -m "%MODEL%" ^
+  --host 127.0.0.1 --port 8080 -c 512 -t 4 --no-warmup --jinja ^
+  --rope-scaling yarn --rope-scale 2 --yarn-orig-ctx 256
 
 echo Waiting for model to load...
-timeout /t 10 /nobreak >nul
+timeout /t 12 /nobreak >nul
 
-echo Opening web UI at http://127.0.0.1:8081
-start "" http://127.0.0.1:8081
+echo Opening web UI at http://127.0.0.1:9200
+start "" http://127.0.0.1:9200
 
-python "%~dp0serve.py" 8081
+python "%~dp0serve.py" 9200
